@@ -1,0 +1,28 @@
+{
+  "name": "r2-image-host-worker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Cloudflare Worker 版 R2 图床：直传或预签名直传 R2，零依赖",
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build:page": "node scripts/gen-page.mjs",
+    "predev": "npm run build:page",
+    "dev": "wrangler dev",
+    "predeploy": "npm run build:page",
+    "deploy": "wrangler deploy",
+    "dry-run": "npm run build:page && wrangler deploy --dry-run --outdir dist",
+    "tail": "wrangler tail",
+    "test:page": "node test/page.test.mjs",
+    "test:sigv4": "node test/sigv4.test.mjs",
+    "test:worker": "node test/worker.test.mjs",
+    "test": "node test/page.test.mjs && node test/sigv4.test.mjs && node test/worker.test.mjs",
+    "scan-secrets": "node scripts/scan-secrets.mjs ."
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}

@@ -1,0 +1,42 @@
+#:schema node_modules/wrangler/config-schema.json
+name = "r2-image-host"
+main = "src/worker.mjs"
+compatibility_date = "2025-01-15"
+
+# 页面模板是构建期生成的静态字符串（src/page.mjs），所以这里不需要
+# 任何 Text/HTML 打包规则 —— 少一条规则就少一种“构建通过但运行时报错”的可能。
+# 改完 public/index.html 记得跑 `npm run build:page`（dev/deploy 前会自动跑）。
+
+# 非机密配置；机密（令牌、S3 密钥）请用 `wrangler secret put`，不要写在这里
+[vars]
+R2_BUCKET = "images"
+# 浏览器直传 R2（默认）还是 Worker 中转写 R2：direct | presign
+UPLOAD_MODE = "direct"
+# 对象 key 前缀
+KEY_PREFIX = "img"
+# 单文件上限（MB）
+MAX_UPLOAD_MB = "20"
+# 预签名 URL 有效期（秒），仅 presign 模式用
+PRESIGN_EXPIRES = "900"
+# 外链前缀。绑了自定义域名或开了 r2.dev 就填这里（如 https://img.example.com）；
+# 留空则回落到当前 Worker 的部署域名（走 /i/ 代理读 R2）
+R2_PUBLIC_BASE = "https://r2img.h5acg.com"
+# 上传/删除口令请用 secret：
+#   wrangler secret put UPLOAD_TOKEN
+#   wrangler secret put DELETE_TOKEN
+# presign 模式还需要下面三个（S3 API 凭据），同样用 secret：
+#   wrangler secret put R2_ACCOUNT_ID
+#   wrangler secret put R2_ACCESS_KEY_ID
+#   wrangler secret put R2_SECRET_ACCESS_KEY
+
+# R2 绑定：Worker 读写桶的唯一途径（无需把 R2 密钥给 Worker）
+[[r2_buckets]]
+binding = "IMAGES"
+bucket_name = "images"
+
+# 可选：自定义域名直接读桶（比走 Worker 的 /i/ 代理更快、不计 Worker 请求）
+# 开了之后把 R2_PUBLIC_BASE 设成同一个域名即可。
+# [[r2_buckets]]
+# binding = "IMAGES"
+# bucket_name = "images"
+# remote = true

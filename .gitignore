@@ -1,0 +1,12 @@
+# wrangler / Cloudflare
+.wrangler/
+node_modules/
+.dev.vars
+
+# 构建产物：npm run build:page / dry-run / deploy 会生成，不该进仓库
+dist/
+
+# 本地测试产物
+.tmp-test/
+*.log
+.DS_Store

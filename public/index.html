@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>R2 图床 · Worker</title>
+<style>
+  :root {
+    --bg: #0b0e14;
+    --panel: #141a24;
+    --panel-2: #1b2230;
+    --line: #263042;
+    --text: #e6edf6;
+    --muted: #8b98ad;
+    --accent: #f6821f;
+    --ok: #35c88a;
+    --err: #ff6b6b;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: var(--bg); color: var(--text);
+    font: 14px/1.55 system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+  }
+  header {
+    display: flex; align-items: center; gap: 12px; padding: 16px 22px;
+    border-bottom: 1px solid var(--line); background: var(--panel);
+    position: sticky; top: 0; z-index: 5; flex-wrap: wrap;
+  }
+  header h1 { margin: 0; font-size: 16px; font-weight: 650; letter-spacing: .3px; }
+  header .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px var(--accent); }
+  header .spacer { flex: 1; }
+  .tag { font-size: 12px; color: var(--muted); border: 1px solid var(--line); padding: 3px 9px; border-radius: 999px; }
+  main { max-width: 1080px; margin: 0 auto; padding: 22px; }
+  .tokenbar { display: flex; gap: 8px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
+  input[type="password"], input[type="text"] {
+    background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
+    padding: 8px 11px; border-radius: 8px; outline: none; min-width: 220px;
+  }
+  input:focus { border-color: var(--accent); }
+  .drop {
+    border: 1.5px dashed var(--line); border-radius: 14px; background: linear-gradient(180deg, #121826, #0f1420);
+    padding: 40px 20px; text-align: center; transition: .18s; cursor: pointer;
+  }
+  .drop:hover { border-color: #7a4a1c; }
+  .drop.over { border-color: var(--accent); background: #241a10; transform: scale(1.005); }
+  .drop b { font-size: 15px; }
+  .drop p { margin: 8px 0 0; color: var(--muted); font-size: 13px; }
+  .bar { height: 6px; background: var(--panel-2); border-radius: 999px; overflow: hidden; margin-top: 14px; display: none; }
+  .bar.on { display: block; }
+  .bar > i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), #ffb066); transition: width .15s; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; margin-top: 20px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .thumb {
+    height: 132px; display: flex; align-items: center; justify-content: center; cursor: zoom-in;
+    background: #0e131c url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16'><rect width='8' height='8' fill='%23151b26'/><rect x='8' y='8' width='8' height='8' fill='%23151b26'/></svg>");
+  }
+  .thumb img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+  .meta { padding: 9px 10px; display: flex; flex-direction: column; gap: 7px; }
+  .meta .key { font-size: 11px; color: var(--muted); word-break: break-all; }
+  .row { display: flex; gap: 6px; flex-wrap: wrap; }
+  button {
+    background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+    border-radius: 7px; padding: 5px 9px; font-size: 12px; cursor: pointer; transition: .15s;
+  }
+  button:hover { border-color: var(--accent); color: #fff; }
+  button.danger:hover { border-color: var(--err); color: var(--err); }
+  .empty { color: var(--muted); text-align: center; padding: 26px; font-size: 13px; }
+  #toasts { position: fixed; right: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 8px; z-index: 20; }
+  .toast { background: var(--panel-2); border: 1px solid var(--line); border-left: 3px solid var(--accent); padding: 9px 13px; border-radius: 8px; font-size: 13px; max-width: 360px; }
+  .toast.err { border-left-color: var(--err); }
+  .toast.ok { border-left-color: var(--ok); }
+  #modal { position: fixed; inset: 0; background: rgba(4,6,10,.9); display: none; align-items: center; justify-content: center; z-index: 30; padding: 24px; }
+  #modal.on { display: flex; }
+  #modal img { max-width: 100%; max-height: 100%; border-radius: 8px; }
+  #modal .hint { position: absolute; bottom: 16px; color: var(--muted); font-size: 12px; }
+  .stat { color: var(--muted); font-size: 12px; margin-top: 10px; }
+  .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+  .tabs button { padding: 7px 16px; font-size: 13px; }
+  .tabs button.on { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  .histbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+  .histbar .grow { flex: 1; min-width: 160px; }
+  .card .when { font-size: 11px; color: var(--muted); }
+  #alert { display: none; margin-bottom: 14px; padding: 11px 14px; border-radius: 10px; font-size: 13px;
+           background: #2a1a12; border: 1px solid #7a4a1c; border-left: 4px solid var(--accent); color: #ffd9bd; }
+  #alert b { color: #ffb066; }
+  .warnbox { display: none; margin-bottom: 14px; padding: 10px 13px; border-radius: 10px; font-size: 12px;
+             background: var(--panel-2); border: 1px solid var(--line); border-left: 4px solid #d9a441; color: #e8d5a8; }
+  code { background: var(--panel-2); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <span class="dot"></span>
+  <h1>R2 图床 · Worker</h1>
+  <span class="tag" id="cfgTag">读取配置…</span>
+  <span class="spacer"></span>
+  <span class="tag" id="countTag">0 张</span>
+</header>
+
+<main>
+  <div class="tokenbar">
+    <input type="password" id="token" placeholder="上传口令（服务端未启用可留空）" autocomplete="off" />
+    <button id="saveToken">保存口令</button>
+    <input type="password" id="delToken" placeholder="删除口令（可选）" autocomplete="off" />
+    <button id="saveDelToken">保存删除口令</button>
+  </div>
+
+  <div id="alert"><b>文件已写入 R2，但外链打不开。</b> <span id="alertText"></span></div>
+
+  <div class="tabs">
+    <button id="tabUpload" class="on">上传</button>
+    <button id="tabHistory">历史图片</button>
+  </div>
+
+  <section id="viewUpload">
+  <div class="drop" id="drop">
+    <b>点击选择图片，或把文件拖进来</b>
+    <p>也支持直接 Ctrl+V 粘贴截图 · 单张上限 __MAX_MB__MB · PNG/JPG/GIF/WebP/AVIF/SVG</p>
+    <div class="bar" id="bar"><i></i></div>
+  </div>
+
+  <div class="stat" id="stat"></div>
+  <div class="grid" id="grid"></div>
+  <div class="empty" id="empty">还没有上传任何图片</div>
+  </section>
+
+  <section id="viewHistory" style="display:none">
+    <div class="histbar">
+      <input type="text" id="histQ" class="grow" placeholder="按 key 搜索，如 a4bcd7 或 2026/10" />
+      <button id="histSearch">搜索</button>
+      <button id="histReload">刷新</button>
+      <label class="tag"><input type="checkbox" id="histDirect" /> 缩略图走直链</label>
+    </div>
+    <div class="stat" id="histStat">点「刷新」从桶里读取清单</div>
+    <div class="warnbox" id="histWarn"></div>
+    <div class="grid" id="histGrid"></div>
+  </section>
+</main>
+
+<div id="toasts"></div>
+<div id="modal"><img alt="preview" /><div class="hint">点击任意处关闭</div></div>
+<input type="file" id="picker" accept="image/*" multiple hidden />
+
+<script>
+const SERVER_TOKEN = "__UPLOAD_TOKEN__";
+const UPLOAD_MODE = "__UPLOAD_MODE__";
+const $ = (id) => document.getElementById(id);
+const store = {
+  get: (k) => { try { return localStorage.getItem('r2ihw:' + k) || ''; } catch { return ''; } },
+  set: (k, v) => { try { localStorage.setItem('r2ihw:' + k, v); } catch {} },
+};
+
+function token() { return SERVER_TOKEN || $('token').value.trim(); }
+function delToken() { return $('delToken').value.trim(); }
+
+function toast(msg, kind = '', ms = 3200) {
+  const el = document.createElement('div');
+  el.className = 'toast ' + kind;
+  el.textContent = msg;
+  $('toasts').appendChild(el);
+  setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity .3s'; setTimeout(() => el.remove(), 320); }, ms);
+}
+
+const fmtSize = (n) => (n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(1) + ' KB' : (n / 1048576).toFixed(2) + ' MB');
+
+async function copy(text, label) {
+  try {
+    await navigator.clipboard.writeText(text);
+    toast('已复制' + (label ? ' ' + label : ''), 'ok');
+  } catch {
+    const ta = document.createElement('textarea');
+    ta.value = text; document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); ta.remove();
+    toast('已复制（兼容模式）', 'ok');
+  }
+}
+
+/* ---------- 上传：两种模式 ---------- */
+async function upload(files) {
+  const list = [...files].filter((f) => f.type.startsWith('image/') || /\.(png|jpe?g|gif|webp|avif|svg|bmp|ico)$/i.test(f.name));
+  if (!list.length) return toast('没有可上传的图片', 'err');
+
+  const bar = $('bar'), fill = bar.querySelector('i');
+  bar.classList.add('on');
+  let done = 0;
+  const step = () => { fill.style.width = Math.round((++done / list.length) * 100) + '%'; };
+
+  for (const file of list) {
+    try {
+      if (UPLOAD_MODE === 'presign') await uploadViaPresign(file);
+      else await uploadViaWorker(file);
+      step();
+    } catch (err) {
+      toast(file.name + '：' + err.message, 'err', 6000);
+    }
+  }
+  setTimeout(() => { bar.classList.remove('on'); fill.style.width = '0'; }, 600);
+}
+
+/** 直传：字节经 Worker 进 R2，R2 凭据不出现在浏览器 */
+async function uploadViaWorker(file) {
+  const fd = new FormData();
+  fd.append('file', file, file.name);
+  // verify=1：让服务端顺手 HEAD 一下外链，上传完就知道能不能打开
+  fd.append('verify', '1');
+  const res = await fetch('/api/upload', {
+    method: 'POST',
+    headers: token() ? { 'x-upload-token': token() } : {},
+    body: fd,
+  });
+  const data = await res.json().catch(() => ({ ok: false, error: 'HTTP ' + res.status }));
+  if (!res.ok || !data.ok) throw new Error(data.error || '上传失败 HTTP ' + res.status);
+  reportVerify(data);
+  for (const f of data.files) addCard(f);
+  if (data.files.some((f) => f.deduped)) toast('该图已存在，已复用', 'ok');
+  refreshCount();
+}
+
+/** 预签名：Worker 只发签名，图片由浏览器直接 PUT 到 R2 */
+async function uploadViaPresign(file) {
+  const fd = new FormData();
+  fd.append('file', file, file.name);
+  fd.append('verify', '1');
+  const res = await fetch('/api/upload', {
+    method: 'POST',
+    headers: token() ? { 'x-upload-token': token() } : {},
+    body: fd,
+  });
+  const data = await res.json().catch(() => ({ ok: false, error: 'HTTP ' + res.status }));
+  if (!res.ok || !data.ok) throw new Error(data.error || '上传失败 HTTP ' + res.status);
+
+  for (const f of data.files) {
+    if (!f.skipUpload) {
+      // 直传 R2：只签了 host，因此这些头可以自由设置
+      const put = await fetch(f.uploadUrl, { method: 'PUT', headers: f.uploadHeaders || {}, body: file });
+      if (!put.ok) throw new Error('直传 R2 失败 HTTP ' + put.status + '（多半是桶没配 CORS）');
+    }
+    addCard(f);
+  }
+  refreshCount();
+}
+
+/** 把服务端的可达性自检结果说清楚：写进桶 ≠ 外链能打开 */
+function reportVerify(data) {
+  if (!data || data.reachableCount === undefined) return;
+  if (data.unreachableCount > 0) {
+    toast(data.hint || '文件已写入 R2，但外链打不开', 'err', 12000);
+    $('alert').style.display = 'block';
+    $('alertText').textContent = data.hint || '文件已写入 R2，但外链打不开。';
+  } else if (data.reachableCount > 0) {
+    toast('外链自检通过，图片可以直接打开', 'ok');
+  }
+}
+
+function addCard(f) {
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.dataset.key = f.key;
+  const name = f.key.split('/').pop();
+  card.innerHTML = `
+    <div class="thumb"><img loading="lazy" src="${f.url}" alt="${name}" /></div>
+    <div class="meta">
+      <div class="key" title="${f.key}">${name} · ${fmtSize(f.size)}${f.deduped ? ' · 已存在' : ''}</div>
+      <div class="row">
+        <button data-act="url">URL</button>
+        <button data-act="md">Markdown</button>
+        <button data-act="html">HTML</button>
+        <button data-act="open">打开</button>
+        <button data-act="del" class="danger">删除</button>
+      </div>
+    </div>`;
+  card.querySelector('.thumb').addEventListener('click', () => openModal(f.url));
+  card.querySelector('[data-act="url"]').onclick = () => copy(f.url, '直链');
+  card.querySelector('[data-act="md"]').onclick = () => copy(f.markdown, 'Markdown');
+  card.querySelector('[data-act="html"]').onclick = () => copy(f.html || `<img src="${f.url}" />`, 'HTML');
+  card.querySelector('[data-act="open"]').onclick = () => window.open(f.url, '_blank', 'noopener');
+  card.querySelector('[data-act="del"]').onclick = () => removeKey(f.key, card);
+  $('grid').prepend(card);
+  $('empty').style.display = 'none';
+}
+
+async function removeKey(key, card) {
+  if (!delToken()) return toast('请先填写并保存删除口令', 'err');
+  if (!confirm('确认删除 ' + key + ' ？')) return;
+  const res = await fetch('/api/delete', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-delete-token': delToken() },
+    body: JSON.stringify({ key }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (res.ok && data.ok) { card.remove(); refreshCount(); toast('已删除 ' + key, 'ok'); }
+  else toast(data.error || '删除失败', 'err');
+}
+
+function refreshCount() {
+  const n = $('grid').children.length;
+  $('countTag').textContent = n + ' 张';
+  $('empty').style.display = n ? 'none' : 'block';
+}
+
+function openModal(src) { $('modal').querySelector('img').src = src; $('modal').classList.add('on'); }
+$('modal').onclick = () => { $('modal').classList.remove('on'); $('modal').querySelector('img').src = ''; };
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') $('modal').onclick(); });
+
+const drop = $('drop');
+drop.onclick = () => $('picker').click();
+$('picker').onchange = (e) => { upload(e.target.files); e.target.value = ''; };
+['dragenter', 'dragover'].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave', 'drop'].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop', (e) => upload(e.dataTransfer.files));
+document.addEventListener('paste', (e) => {
+  const files = [...(e.clipboardData?.files || [])];
+  if (files.length) upload(files);
+});
+['dragover', 'drop'].forEach((ev) => window.addEventListener(ev, (e) => { if (e.target === document.body) e.preventDefault(); }));
+
+$('token').value = store.get('token');
+$('delToken').value = store.get('delToken');
+$('saveToken').onclick = () => { store.set('token', $('token').value.trim()); toast('上传口令已保存到本机', 'ok'); };
+$('saveDelToken').onclick = () => { store.set('delToken', $('delToken').value.trim()); toast('删除口令已保存到本机', 'ok'); };
+
+if (SERVER_TOKEN) {
+  $('token').value = '（服务端已内置）';
+  $('token').disabled = true;
+  $('saveToken').disabled = true;
+  $('token').placeholder = '服务端已配置上传口令';
+}
+
+fetch('/api/config').then((r) => r.json()).then((h) => {
+  const host = h.publicBase ? new URL(h.publicBase).host : location.host;
+  $('cfgTag').textContent = (h.mode === 'presign' ? '直传 R2' : 'Worker 中转') + ' · ' + host;
+  $('stat').innerHTML = `上传接口：<code>POST /api/upload</code>（字段 <code>file</code>）· 单张上限 ${h.maxUploadMb}MB · `
+    + `CLI 一行搞定：<code>curl -F file=@a.png -H "x-upload-token: ***" ${location.origin}/api/upload?redirect=1</code>`
+    + (h.mode === 'presign' ? ' · 当前为预签名直传模式，桶需配 CORS' : '');
+}).catch(() => { $('cfgTag').textContent = '配置读取失败'; });
+
+refreshCount();
+
+/* ---------- 历史清单（服务端列桶） ---------- */
+const hist = { items: [], q: '', hasMore: false, busy: false };
+let histPublicBase = null;
+
+function switchTab(which) {
+  const isHistory = which === 'history';
+  $('viewUpload').style.display = isHistory ? 'none' : 'block';
+  $('viewHistory').style.display = isHistory ? 'block' : 'none';
+  $('tabUpload').classList.toggle('on', !isHistory);
+  $('tabHistory').classList.toggle('on', isHistory);
+  location.hash = isHistory ? '#history' : '';
+  if (isHistory && !hist.items.length) loadHistory(true);
+}
+
+$('tabUpload').onclick = () => switchTab('upload');
+$('tabHistory').onclick = () => switchTab('history');
+
+async function loadHistory(reset) {
+  if (hist.busy) return;
+  if (!token()) {
+    $('histStat').textContent = '需要上传口令：历史清单受口令保护，请先在上方填写并保存';
+    return;
+  }
+  hist.busy = true;
+  $('histStat').textContent = '正在读取桶清单…';
+  try {
+    const params = new URLSearchParams({ limit: '200', months: '3' });
+    if (hist.q) params.set('q', hist.q);
+    const res = await fetch(`/api/list?${params}`, { headers: { 'x-upload-token': token() } });
+    const data = await res.json().catch(() => ({ ok: false, error: 'HTTP ' + res.status }));
+    if (!res.ok || !data.ok) throw new Error(data.error || 'HTTP ' + res.status);
+
+    if (reset) { $('histGrid').innerHTML = ''; hist.items = []; }
+    hist.hasMore = data.hasMore;
+    for (const item of data.objects) {
+      hist.items.push(item);
+      $('histGrid').appendChild(historyCard(item, data.publicBase));
+    }
+    histPublicBase = data.publicBase;
+
+    $('histStat').textContent = `已列出 ${hist.items.length} 张 · 扫描 ${data.monthsScanned} 个月份（${data.group}）`
+      + ` · 本次 list 调用 ${data.listCalls} 次`
+      + (data.hasMore ? ' · 还有更多，可搜索缩小范围' : '');
+    const warn = $('histWarn');
+    if (data.note) { warn.textContent = data.note; warn.style.display = 'block'; } else { warn.style.display = 'none'; }
+    if (!hist.items.length) $('histStat').textContent += ' · 该范围内没有图片';
+  } catch (err) {
+    $('histStat').textContent = '读取失败：' + err.message;
+  } finally {
+    hist.busy = false;
+  }
+}
+
+function historyCard(f, publicBase) {
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.dataset.key = f.key;
+  const src = $('histDirect').checked && publicBase ? f.url : f.thumbUrl;
+  const when = f.uploaded ? new Date(f.uploaded).toLocaleString() : '—';
+  card.innerHTML = `
+    <div class="thumb"><img loading="lazy" src="${src}" alt="${f.name}" /></div>
+    <div class="meta">
+      <div class="key" title="${f.key}">${f.name} · ${fmtSize(f.size)}</div>
+      <div class="when">${when}</div>
+      <div class="row">
+        <button data-act="url">URL</button>
+        <button data-act="md">Markdown</button>
+        <button data-act="open">打开</button>
+        <button data-act="del" class="danger">删除</button>
+      </div>
+    </div>`;
+  const img = card.querySelector('img');
+  img.onerror = () => {
+    // 直链不可达（桶没公开）就自动退回 Worker 代理，避免整屏空白
+    if (img.src !== f.thumbUrl && !img.dataset.fallback) { img.dataset.fallback = '1'; img.src = f.thumbUrl; }
+  };
+  card.querySelector('.thumb').addEventListener('click', () => openModal(img.src));
+  card.querySelector('[data-act="url"]').onclick = () => copy(f.url, '直链');
+  card.querySelector('[data-act="md"]').onclick = () => copy(f.markdown, 'Markdown');
+  card.querySelector('[data-act="open"]').onclick = () => window.open(f.url, '_blank', 'noopener');
+  card.querySelector('[data-act="del"]').onclick = () => removeKey(f.key, card);
+  return card;
+}
+
+$('histReload').onclick = () => loadHistory(true);
+$('histSearch').onclick = () => { hist.q = $('histQ').value.trim(); loadHistory(true); };
+$('histQ').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('histSearch').onclick(); });
+$('histDirect').onchange = () => loadHistory(true);
+
+if (location.hash === '#history') switchTab('history');
+</script>
+</body>
+</html>
