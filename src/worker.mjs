@@ -9,6 +9,7 @@ import { sniffImage, extFor, sanitizeName } from './image-utils.mjs';
 // 页面模板是构建期生成的静态字符串（scripts/gen-page.mjs），
 // 没有任何条件导入或打包器规则依赖，避免“模块能构建但运行时报错”。
 import { indexHtml } from './page.mjs';
+import { apiTestHtml } from './api-test-page.mjs';
 
 const DEFAULT_MAX_MB = 20;
 const IMMUTABLE = 'public, max-age=31536000, immutable';
@@ -598,6 +599,14 @@ export function createHandler() {
       const res = await handleDelete({ request, cfg, bucket });
       for (const [k, v] of Object.entries(cors)) res.headers.set(k, v);
       return res;
+    }
+
+    // API 测试台：便于在浏览器里直接调试各接口
+    if (url.pathname === '/api-test' || url.pathname === '/api-test.html') {
+      const html = (env.__ASSETS__?.apiTestHtml || apiTestHtml);
+      return new Response(html, {
+        headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' },
+      });
     }
 
     if (url.pathname === '/' || url.pathname === '/index.html') {

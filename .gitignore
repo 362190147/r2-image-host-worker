@@ -10,3 +10,7 @@ dist/
 .tmp-test/
 *.log
 .DS_Store
+
+# 本地 wrangler 运行时目录（dev 时用 XDG_CONFIG_HOME 指到这里）
+.xdg-config/
+.wrangler-home/

@@ -1,0 +1,387 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>R2 图床 · API 测试台</title>
+<style>
+  :root {
+    --bg: #0b0e14;
+    --panel: #141a24;
+    --panel-2: #1b2230;
+    --line: #263042;
+    --text: #e6edf6;
+    --muted: #8b98ad;
+    --accent: #f6821f;
+    --ok: #35c88a;
+    --err: #ff6b6b;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: var(--bg); color: var(--text);
+    font: 14px/1.55 system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+  }
+  header {
+    display: flex; align-items: center; gap: 12px; padding: 16px 22px;
+    border-bottom: 1px solid var(--line); background: var(--panel);
+    position: sticky; top: 0; z-index: 5; flex-wrap: wrap;
+  }
+  header h1 { margin: 0; font-size: 16px; font-weight: 650; letter-spacing: .3px; }
+  header .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px var(--accent); }
+  header .spacer { flex: 1; }
+  .tag { font-size: 12px; color: var(--muted); border: 1px solid var(--line); padding: 3px 9px; border-radius: 999px; }
+  main { max-width: 1100px; margin: 0 auto; padding: 22px; }
+  .conn {
+    display: grid; grid-template-columns: 1fr auto; gap: 10px 16px; align-items: center;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-bottom: 18px;
+  }
+  .conn label { font-size: 12px; color: var(--muted); display: flex; flex-direction: column; gap: 4px; }
+  input[type="password"], input[type="text"], select {
+    background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
+    padding: 8px 11px; border-radius: 8px; outline: none; width: 100%;
+  }
+  input:focus, select:focus { border-color: var(--accent); }
+  .btns { display: flex; gap: 8px; flex-wrap: wrap; }
+  button {
+    background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+    border-radius: 7px; padding: 8px 14px; font-size: 13px; cursor: pointer; transition: .15s;
+  }
+  button:hover { border-color: var(--accent); color: #fff; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover { filter: brightness(1.1); }
+  button.sm { padding: 4px 8px; font-size: 11px; }
+  button.danger:hover { border-color: var(--err); color: var(--err); }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 16px; margin-bottom: 16px;
+  }
+  .card h2 { margin: 0 0 4px; font-size: 15px; font-weight: 650; display: flex; align-items: center; gap: 8px; }
+  .card .method {
+    font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 5px;
+    background: #1e3a2c; color: var(--ok); letter-spacing: .5px;
+  }
+  .card .method.post { background: #3a2e1e; color: #e8b874; }
+  .card .desc { color: var(--muted); font-size: 12px; margin-bottom: 12px; }
+  .fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; margin-bottom: 12px; }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field label { font-size: 11px; color: var(--muted); }
+  .check { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; }
+  .result {
+    margin-top: 12px; display: none; border: 1px solid var(--line); border-radius: 8px; overflow: hidden;
+  }
+  .result.on { display: block; }
+  .result-head {
+    display: flex; gap: 10px; align-items: center; padding: 8px 12px; background: var(--panel-2);
+    border-bottom: 1px solid var(--line); font-size: 12px; flex-wrap: wrap;
+  }
+  .badge { font-weight: 700; padding: 2px 8px; border-radius: 5px; }
+  .badge.ok { background: #1e3a2c; color: var(--ok); }
+  .badge.err { background: #3a1e1e; color: var(--err); }
+  .badge.muted { background: var(--panel); color: var(--muted); }
+  pre {
+    margin: 0; padding: 12px; max-height: 320px; overflow: auto; background: #0c1018;
+    font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 12px; line-height: 1.5;
+    white-space: pre-wrap; word-break: break-all;
+  }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .home { font-size: 12px; }
+  #toasts { position: fixed; right: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 8px; z-index: 20; }
+  .toast { background: var(--panel-2); border: 1px solid var(--line); border-left: 3px solid var(--accent); padding: 9px 13px; border-radius: 8px; font-size: 13px; max-width: 360px; }
+  .toast.err { border-left-color: var(--err); }
+  .toast.ok { border-left-color: var(--ok); }
+</style>
+</head>
+<body>
+<header>
+  <span class="dot"></span>
+  <h1>R2 图床 · API 测试台</h1>
+  <span class="tag">直连 Worker 接口调试</span>
+  <span class="spacer"></span>
+  <a class="home" href="/">← 返回上传页</a>
+</header>
+
+<main>
+  <div class="conn">
+    <label>Worker 地址
+      <input type="text" id="base" value="" placeholder="https://r2-image-host.xxx.workers.dev" />
+    </label>
+    <label>上传口令 UPLOAD_TOKEN
+      <input type="password" id="uploadToken" placeholder="未配置可留空" autocomplete="off" />
+    </label>
+    <label>删除口令 DELETE_TOKEN
+      <input type="password" id="deleteToken" placeholder="删除接口用" autocomplete="off" />
+    </label>
+    <div class="btns">
+      <button id="saveConn">保存连接信息</button>
+      <button id="resetConn">重置</button>
+    </div>
+  </div>
+
+  <!-- GET /api/config -->
+  <div class="card">
+    <h2><span class="method">GET</span> /api/config <span class="tag">匿名</span></h2>
+    <div class="desc">读取公开配置（上传模式、外链前缀、单文件上限、是否需要鉴权）。</div>
+    <div class="btns">
+      <button class="primary" data-api="config">发送请求</button>
+      <button class="sm" data-curl="config">复制 cURL</button>
+    </div>
+    <div class="result" id="res-config"></div>
+  </div>
+
+  <!-- GET /api/health -->
+  <div class="card">
+    <h2><span class="method">GET</span> /api/health <span class="tag">需上传口令</span></h2>
+    <div class="desc">健康检查 + 完整配置状态（桶名、模式、上限、删除是否启用、key 前缀）。</div>
+    <div class="btns">
+      <button class="primary" data-api="health">发送请求</button>
+      <button class="sm" data-curl="health">复制 cURL</button>
+    </div>
+    <div class="result" id="res-health"></div>
+  </div>
+
+  <!-- GET /api/diag -->
+  <div class="card">
+    <h2><span class="method">GET</span> /api/diag <span class="tag">需上传口令</span></h2>
+    <div class="desc">配置体检：回报哪些 env 存在（不回报值）、lint 问题、可选定点 key 诊断。</div>
+    <div class="fields">
+      <div class="field">
+        <label>key（可选，形如 img/2026/10/xxxx.png）</label>
+        <input type="text" id="diagKey" placeholder="留空只看配置体检" />
+      </div>
+    </div>
+    <div class="btns">
+      <button class="primary" data-api="diag">发送请求</button>
+      <button class="sm" data-curl="diag">复制 cURL</button>
+    </div>
+    <div class="result" id="res-diag"></div>
+  </div>
+
+  <!-- GET /api/list -->
+  <div class="card">
+    <h2><span class="method">GET</span> /api/list <span class="tag">需上传口令</span></h2>
+    <div class="desc">历史图片清单（列桶），最新在前。受口令保护。</div>
+    <div class="fields">
+      <div class="field"><label>months（1-12）</label><input type="text" id="listMonths" value="2" /></div>
+      <div class="field"><label>limit（1-1000）</label><input type="text" id="listLimit" value="50" /></div>
+      <div class="field"><label>month（YYYY-MM，与 months 二选一）</label><input type="text" id="listMonth" placeholder="如 2026-10" /></div>
+      <div class="field"><label>q（按 key 搜索）</label><input type="text" id="listQ" placeholder="如 a4bcd7" /></div>
+    </div>
+    <div class="btns">
+      <button class="primary" data-api="list">发送请求</button>
+      <button class="sm" data-curl="list">复制 cURL</button>
+    </div>
+    <div class="result" id="res-list"></div>
+  </div>
+
+  <!-- POST /api/upload -->
+  <div class="card">
+    <h2><span class="method post">POST</span> /api/upload <span class="tag">需上传口令</span></h2>
+    <div class="desc">上传图片。multipart/form-data，字段名 file，支持多文件。可附带 redirect / verify。</div>
+    <div class="fields">
+      <div class="field">
+        <label>图片文件</label>
+        <input type="file" id="upFile" accept="image/*" multiple />
+      </div>
+      <div class="field"><label>redirect（1=成功后 302 跳到第一张图）</label>
+        <select id="upRedirect"><option value="0">0（关）</option><option value="1">1（开）</option></select>
+      </div>
+      <div class="field"><label>verify（1=上传后自检外链可达性）</label>
+        <select id="upVerify"><option value="1">1（开）</option><option value="0">0（关）</option></select>
+      </div>
+    </div>
+    <div class="btns">
+      <button class="primary" data-api="upload">发送请求</button>
+      <button class="sm" data-curl="upload">复制 cURL</button>
+    </div>
+    <div class="result" id="res-upload"></div>
+  </div>
+
+  <!-- POST /api/delete -->
+  <div class="card">
+    <h2><span class="method post">POST</span> /api/delete <span class="tag">需删除口令</span></h2>
+    <div class="desc">删除图片。只接受以 KEY_PREFIX/ 开头、不含 .. 与 // 的 key。</div>
+    <div class="fields">
+      <div class="field">
+        <label>key（必填，如 img/2026/10/xxxx.png）</label>
+        <input type="text" id="delKey" placeholder="img/2026/10/a4bcd7....png" />
+      </div>
+    </div>
+    <div class="btns">
+      <button class="primary danger" data-api="delete">发送请求</button>
+      <button class="sm" data-curl="delete">复制 cURL</button>
+    </div>
+    <div class="result" id="res-delete"></div>
+  </div>
+</main>
+
+<div id="toasts"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const store = {
+  get: (k) => { try { return localStorage.getItem('r2ihw-api:' + k) || ''; } catch { return ''; } },
+  set: (k, v) => { try { localStorage.setItem('r2ihw-api:' + k, v); } catch {} },
+};
+
+// 默认用当前 origin，方便同域部署
+$('base').value = store.get('base') || location.origin.replace(/\/$/, '');
+$('uploadToken').value = store.get('uploadToken');
+$('deleteToken').value = store.get('deleteToken');
+
+$('saveConn').onclick = () => {
+  store.set('base', $('base').value.trim().replace(/\/$/, ''));
+  store.set('uploadToken', $('uploadToken').value);
+  store.set('deleteToken', $('deleteToken').value);
+  toast('连接信息已保存到本机', 'ok');
+};
+$('resetConn').onclick = () => {
+  $('base').value = location.origin.replace(/\/$/, '');
+  $('uploadToken').value = '';
+  $('deleteToken').value = '';
+  store.set('base', $('base').value);
+  store.set('uploadToken', '');
+  store.set('deleteToken', '');
+  toast('已重置为当前域名', 'ok');
+};
+
+function base() { return $('base').value.trim().replace(/\/$/, ''); }
+function upTok() { return $('uploadToken').value; }
+function delTok() { return $('deleteToken').value; }
+
+function toast(msg, kind = '', ms = 3200) {
+  const el = document.createElement('div');
+  el.className = 'toast ' + kind;
+  el.textContent = msg;
+  $('toasts').appendChild(el);
+  setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity .3s'; setTimeout(() => el.remove(), 320); }, ms);
+}
+
+function fmtJson(text) {
+  try { return JSON.stringify(JSON.parse(text), null, 2); } catch { return text; }
+}
+
+function showResult(id, { status, ok, body, ms, curl }) {
+  const box = $(id);
+  box.classList.add('on');
+  const cls = ok ? 'ok' : (status >= 400 ? 'err' : 'muted');
+  box.innerHTML = `
+    <div class="result-head">
+      <span class="badge ${cls}">${status}</span>
+      <span class="badge muted">${ms} ms</span>
+      <button class="sm" data-copy>复制响应</button>
+      <button class="sm" data-curlbtn>复制 cURL</button>
+    </div>
+    <pre></pre>`;
+  box.querySelector('pre').textContent = fmtJson(body);
+  box.querySelector('[data-copy]').onclick = () => copyText(body, '响应');
+  box.querySelector('[data-curlbtn]').onclick = () => copyText(curl, 'cURL');
+}
+
+async function copyText(text, label) {
+  try { await navigator.clipboard.writeText(text); toast('已复制' + (label ? ' ' + label : ''), 'ok'); }
+  catch { const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); toast('已复制（兼容模式）', 'ok'); }
+}
+
+/* ---------- 请求执行 ---------- */
+async function run(api) {
+  const url = base();
+  if (!url) return toast('请先填写 Worker 地址', 'err');
+  const start = performance.now();
+
+  try {
+    let fetchUrl, opts, curl;
+    if (api === 'config') {
+      fetchUrl = `${url}/api/config`;
+      opts = { method: 'GET' };
+      curl = `curl -s "${fetchUrl}"`;
+    } else if (api === 'health') {
+      fetchUrl = `${url}/api/health`;
+      opts = { method: 'GET', headers: upTok() ? { 'x-upload-token': upTok() } : {} };
+      curl = `curl -s${upTok() ? ` -H "x-upload-token: ${upTok()}"` : ''} "${fetchUrl}"`;
+    } else if (api === 'diag') {
+      const k = $('diagKey').value.trim();
+      fetchUrl = `${url}/api/diag${k ? '?key=' + encodeURIComponent(k) : ''}`;
+      opts = { method: 'GET', headers: upTok() ? { 'x-upload-token': upTok() } : {} };
+      curl = `curl -s${upTok() ? ` -H "x-upload-token: ${upTok()}"` : ''} "${fetchUrl}"`;
+    } else if (api === 'list') {
+      const p = new URLSearchParams();
+      if ($('listMonth').value.trim()) p.set('month', $('listMonth').value.trim());
+      else p.set('months', $('listMonths').value.trim() || '2');
+      p.set('limit', $('listLimit').value.trim() || '50');
+      if ($('listQ').value.trim()) p.set('q', $('listQ').value.trim());
+      fetchUrl = `${url}/api/list?${p}`;
+      opts = { method: 'GET', headers: upTok() ? { 'x-upload-token': upTok() } : {} };
+      curl = `curl -s${upTok() ? ` -H "x-upload-token: ${upTok()}"` : ''} "${fetchUrl}"`;
+    } else if (api === 'upload') {
+      const files = $('upFile').files;
+      if (!files.length) return toast('请先选择图片文件', 'err');
+      const fd = new FormData();
+      for (const f of files) fd.append('file', f, f.name);
+      if ($('upRedirect').value === '1') fd.append('redirect', '1');
+      if ($('upVerify').value === '1') fd.append('verify', '1');
+      fetchUrl = `${url}/api/upload`;
+      opts = { method: 'POST', headers: upTok() ? { 'x-upload-token': upTok() } : {}, body: fd };
+      const f0 = files[0];
+      curl = `curl -s${upTok() ? ` -H "x-upload-token: ${upTok()}"` : ''} \\
+  -F "file=@${f0.name}"${$('upRedirect').value === '1' ? ' -F "redirect=1"' : ''}${$('upVerify').value === '1' ? ' -F "verify=1"' : ''} \\
+  "${fetchUrl}"`;
+    } else if (api === 'delete') {
+      const k = $('delKey').value.trim();
+      if (!k) return toast('请填写要删除的 key', 'err');
+      fetchUrl = `${url}/api/delete`;
+      const body = JSON.stringify({ key: k });
+      opts = { method: 'POST', headers: { 'content-type': 'application/json', ...(delTok() ? { 'x-delete-token': delTok() } : {}) }, body };
+      curl = `curl -s -X POST "${fetchUrl}" \\
+  -H "content-type: application/json"${delTok() ? ` -H "x-delete-token: ${delTok()}"` : ''} \\
+  -d '${body}'`;
+    }
+
+    const res = await fetch(fetchUrl, opts);
+    const text = await res.text();
+    const elapsed = Math.round(performance.now() - start);
+    showResult(`res-${api}`, { status: res.status, ok: res.ok, body: text, ms: elapsed, curl });
+  } catch (err) {
+    showResult(`res-${api}`, { status: 'ERR', ok: false, body: String(err && err.message || err), ms: Math.round(performance.now() - start), curl: '' });
+  }
+}
+
+/* ---------- 事件绑定 ---------- */
+document.querySelectorAll('[data-api]').forEach((b) => b.addEventListener('click', () => run(b.dataset.api)));
+document.querySelectorAll('[data-curl]').forEach((b) => b.addEventListener('click', () => {
+  // 点击复制 cURL 时临时生成（不实际发请求）
+  const api = b.dataset.curl;
+  const url = base();
+  if (!url) return toast('请先填写 Worker 地址', 'err');
+  let curl = '';
+  if (api === 'config') curl = `curl -s "${url}/api/config"`;
+  else if (api === 'health') curl = `curl -s${upTok() ? ` -H "x-upload-token: ${upTok()}"` : ''} "${url}/api/health"`;
+  else if (api === 'diag') {
+    const k = $('diagKey').value.trim();
+    curl = `curl -s${upTok() ? ` -H "x-upload-token: ${upTok()}"` : ''} "${url}/api/diag${k ? '?key=' + encodeURIComponent(k) : ''}"`;
+  } else if (api === 'list') {
+    const p = new URLSearchParams();
+    if ($('listMonth').value.trim()) p.set('month', $('listMonth').value.trim());
+    else p.set('months', $('listMonths').value.trim() || '2');
+    p.set('limit', $('listLimit').value.trim() || '50');
+    if ($('listQ').value.trim()) p.set('q', $('listQ').value.trim());
+    curl = `curl -s${upTok() ? ` -H "x-upload-token: ${upTok()}"` : ''} "${url}/api/list?${p}"`;
+  } else if (api === 'upload') {
+    const f0 = $('upFile').files[0];
+    const fn = f0 ? f0.name : 'photo.png';
+    curl = `curl -s${upTok() ? ` -H "x-upload-token: ${upTok()}"` : ''} \\
+  -F "file=@${fn}"${$('upRedirect').value === '1' ? ' -F "redirect=1"' : ''}${$('upVerify').value === '1' ? ' -F "verify=1"' : ''} \\
+  "${url}/api/upload"`;
+  } else if (api === 'delete') {
+    const k = $('delKey').value.trim() || 'img/2026/10/xxxx.png';
+    curl = `curl -s -X POST "${url}/api/delete" \\
+  -H "content-type: application/json"${delTok() ? ` -H "x-delete-token: ${delTok()}"` : ''} \\
+  -d '{"key":"${k}"}'`;
+  }
+  copyText(curl, 'cURL');
+}));
+</script>
+</body>
+</html>
